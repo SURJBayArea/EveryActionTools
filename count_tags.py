@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Returns count of csv records wih Action Network tags
 
-Loks for column `can2_user_tags`
+Looks for column `can2_user_tags`
 
 email,can2_user_tags
 some.one@example.com,"#Trump, ?Direct Action, ?Organizing, Phone_Bank"
