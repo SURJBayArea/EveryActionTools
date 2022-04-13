@@ -6,11 +6,19 @@ Looks for column `can2_user_tags`
 email,can2_user_tags
 some.one@example.com,"#Trump, ?Direct Action, ?Organizing, Phone_Bank"
 
+Assume tags separated by ", " which misses some tags with embedded "," like
+"[Alpine] Donors from 7.18.19 - 10.1.19 (Created: July 22, 2019 1:04 PM)"
+
 """
 import csv
 import sys
+import re
+
+# Special case with embedded comma:
+#MATCHTAGS=r'[^,\s].[^,]*[(][^,]*,[^,]*[)][^,]*|[^,\s].[^,]+'
 
 tag_count = {}
+total = 0
 
 if len(sys.argv) == 1:
     print("usage: count_tags [file ...] ")
@@ -20,12 +28,13 @@ for filename in sys.argv[1:]:
     with open(filename, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            for tag in row['can2_user_tags'].split(', '):
+            total += 1
+            for tag in row['can2_user_tags'].split(", "):
                 if tag:
                     tag_count[tag] = tag_count.get(tag, 0) + 1
 
 tags_sorted = sorted(tag_count.items(),key=lambda x: x[1],reverse=True)
 for (tag, count) in tags_sorted:
-    print(f"{count}\t{tag}")
+    print(f"{count},{tag}")
 
-print(f"{len(tags_sorted)}\tTOTAL")
+print(f"{len(tags_sorted)},Tags in {total} items")
