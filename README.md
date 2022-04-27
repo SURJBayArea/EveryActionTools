@@ -2,15 +2,14 @@
 
 Programs for membership migration and contact management with EveryAction
 
+ * `sync_activists.py` - Syncs an Action Network export with EveryAction database
  * `count_tags.py` - Returns count of csv records wih Action Network tags
 
 To run Python scripts
 
-    python count_tags.py filename.xls
+    python sync_activists.py filename.csv
 
 ## Organization
-
-
 
 ## Getting Started
 

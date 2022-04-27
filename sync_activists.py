@@ -9,13 +9,14 @@ Syncs exports of Action Network activists with EveryAction contacts
 Uses these environment variables which can be set in an .env file in the
 same folder. For example,
 
-    EVERYACTION_APP_NAME=TSURJ.99.9999
-    EVERYACTION_API_KEY=d9999f51-8564-5341-145g-g615d99999af
-    ACTIONNETWORK_ACTIVIST_CSV=downloads/export-2022-03-22-csv_report_332566_1648001887.csv
+    EVERYACTION_APP_NAME="TSURJ.99.9999"
+    EVERYACTION_API_KEY="d9999f51-8564-5341-145g-g615d99999af"
+    ACTIONNETWORK_ACTIVIST_CSV="downloads/export-2022-03-22-csv_report_332566_1648001887.csv"
 
 Looks for these special columns. Only `email` is required:
  * `email` (Required)
- * `uuid` - If present must match ExternalId of type ActionNetworkId if one is found
+ * `uuid` - If present warns if it does not match ExternalId of type ActionNetworkId if one is found
+ * `can2_subscription_status` - If present will update subscription status in EveryAction
  * TODO: `can2_user_tags` - Tag names separated by ", "
  * TODO: `first_name`
  * TODO: `last_name`
@@ -33,6 +34,7 @@ import csv
 import logging
 import os
 import sys
+from datetime import datetime
 
 from dotenv import load_dotenv
 from everyaction import EAClient
@@ -64,7 +66,7 @@ class SyncActvists:
 
         self.client = EAClient(mode=1)
 
-        self.filename = os.getenv(env_filename)
+        self.filename = self.args.inputFile or os.getenv(env_filename)
 
         self.logfile = None
         self.init_logfile()
@@ -105,34 +107,50 @@ class SyncActvists:
         parser.add_argument('--dryrun', '-d', action="store_true",
                             help="Indicate what would happen but don't send to EveryAction")
         parser.add_argument('--log', '-l', type=str, default=SyncActvists.DEFAULT_LOGFILE,
-                            help="Defaults to name of input file .log. Use '-' for console.",
+                            help="Defaults to name of input file with .log extension. "
+                            "Use '-' for console.",
                             dest='logfilename')
         parser.add_argument('--resume', action="store_true",
                             help="Resume importing imports (as per existing file)")
+        parser.add_argument('--overwrite', action="store_true",
+                            help="Overwrite existing log file")
 
-        # TODO: Use env variable
         parser.add_argument(
             'inputFile', help='Importable CSV file', default='def', nargs='?')
 
         return parser
 
-    def print(self, rowid, status, key, message=''):
-        """Log item status"""
-        print(f"[{rowid:0>4}] {status} {key}: {message}",
+    def log_actions(self, rowid, status, key, message=''):
+        """Log item status
+
+        OK - No further action
+        DRYRUN - Reports what would happen
+        """
+        if self.args.dryrun and status == "OK":
+            status = "DRYRUN"
+
+        print(f"[{rowid:0>4}] {status} {key} {message}",
               file=self.logfile, flush=True)
 
     def sync_file(self):
         "Reads through file"
 
         with open(self.args.logfilename, 'a', encoding='utf8') as self.logfile:
+            print(
+                f"SyncTime: {datetime.now():%Y-%m-%d %H:%M:%S}", file=self.logfile)
+
             with open(self.filename, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 if 'email' not in reader.fieldnames:
                     sys.exit(
                         f"Error: '{self.filename}': Expected column 'email'")
                 check_uuid = 'uuid' in reader.fieldnames
+                check_subscription_status = 'can2_subscription_status' in reader.fieldnames
+                check_tags = 'can2_user_tags' in reader.fieldnames
+
                 rowid = 0
                 for row in reader:
+                    row_actions = []
                     rowid += 1
 
                     if not self.args.start_row <= rowid <= self.args.end_row:
@@ -141,30 +159,47 @@ class SyncActvists:
                     if rowid in self.skip_item:
                         continue
 
-                    email = row['email']
+                    row_email = row['email']
                     try:
                         contact = self.client.people.lookup(
-                            email=email, expand="Addresses,ExternalIds,Emails")
+                            email=row_email, expand="Addresses,ExternalIds,Emails")
                     except AttributeError as ex:
-                        self.print(rowid, "ERROR", email,
-                                   f"AttributeError: {ex}")
+                        self.log_actions(rowid, "ERROR", row_email,
+                                         f"AttributeError: {ex}")
                         continue
 
                     if contact is None:
-                        self.print(rowid, "NOT_FOUND",
-                                   email, "Record not found")
+                        self.log_actions(rowid, "NOT_FOUND",
+                                         row_email, "Record not found")
                         continue
 
                     if check_uuid:
                         for identifier in contact.identifiers:
                             if identifier.type == 'ActionNetworkID' and \
                                     identifier.externalId != row['uuid']:
-                                self.print(rowid, "MISMATCH_ID", email,
-                                           f"Found ActionNetworkId {identifier.externalId}: "
-                                           f"Does not match data {row['uuid']}")
+                                self.log_actions(rowid, "MISMATCH_ID", row_email,
+                                                 f"Found ActionNetworkId {identifier.externalId}: "
+                                                 f"Does not match data {row['uuid']}")
                                 continue
 
-                    self.print(rowid, "OK", email)
+                    if check_subscription_status:
+                        preferred_contact_email = None
+                        for contact_email in contact.emails:
+                            if contact_email.isPreferred:
+                                preferred_contact_email = contact_email
+                                # If subscriptionStatus is None then same as "S"
+                                contact_subscription_status = contact_email.subscriptionStatus or "S"
+                                break
+                        if row['can2_subscription_status'] == 'unsubscribed' and \
+                                contact_subscription_status != 'U':
+                            row_actions.append("Unsubscribed")
+                            preferred_contact_email.isSubscribed = False
+                            if not self.args.dryrun:
+                                self.client.people.update(
+                                    contact.van_id,
+                                    emails=[preferred_contact_email])
+
+                    self.log_actions(rowid, "OK", row_email, row_actions)
 
     def get_activist_codes(self):
         """Look up actvist codes
@@ -192,7 +227,7 @@ class SyncActvists:
             if self.args.logfilename == SyncActvists.DEFAULT_LOGFILE:
                 self.args.logfilename = self.filename + ".log"
 
-            if not os.path.isfile(self.args.logfilename):
+            if not os.path.isfile(self.args.logfilename) or self.args.overwrite:
                 print("Log file:", self.args.logfilename, file=sys.stderr)
                 if self.args.resume:
                     print("Option --resume ignored. File not found",
@@ -202,7 +237,7 @@ class SyncActvists:
             else:
                 if not self.args.resume:
                     raise Exception(
-                        f"{self.args.logfilename}: File exists. Use --resume or remove file.")
+                        f"{self.args.logfilename}: File exists. Use --resume, --overwrite or remove file.")
 
                 print("Logile (resume):", self.args.logfilename, file=sys.stderr)
                 # Remember items to skip
