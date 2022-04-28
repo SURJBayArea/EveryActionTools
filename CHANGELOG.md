@@ -1,7 +1,10 @@
 # Change Log
 
+## [2022-04-27]
+- Sync unsubscribed
+
 ## [2022-04-09]
 ## Added
-- sync_activists - (in progress) Looks up EA activist by email
+- sync_activists - Looks up EA activist by email
 
 
