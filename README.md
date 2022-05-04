@@ -58,5 +58,46 @@ successful syncs.
 
     python sync_activists.py --resume an_export.csv
 
-## Paramaters
+## Columns
 
+The sync_activists.py script syncs data from these special columns. Other columns are ignored. Only `email` is required:
+ * `email` 
+ * `uuid` - If present warns if it does not match ExternalId of type ActionNetworkId if one is found
+ * `can2_subscription_status` - If present will update subscription status in EveryAction
+ * `can2_user_tags` - Tag names separated by ", "
+ * `first_name`
+ * `last_name`
+ * `zip_code`
+ * `can2_user_address`
+ * `can2_user_city`
+ * `can2_state_abbreviated`
+ * `zip_code`
+ * `country`
+ * `can2_phone` - special mobile phone number
+ * `can2_sms_status` - indicates if mobile phone has been opted in.
+ * `Phone` - custom field
+ * `Phone Number` - another custom field
+
+## Options
+
+    usage: sync_activists.py [-h] [--env dotenv_file] [--start N] [--end N | --count N] [--verbose] [--update] [--dryrun] [--log LOGFILENAME] [--resume] [--overwrite] [inputFile]
+
+    Sync activists from a CSV export
+
+    positional arguments:
+    inputFile             Importable CSV file
+
+    options:
+    -h, --help            show this help message and exit
+    --env dotenv_file, -g dotenv_file
+                            Environment File with API Key.
+    --start N, -s N       First row to process (starting at 1)
+    --end N, -e N         Last row to process
+    --count N, -c N       Number of rows to process
+    --verbose, -v         Show data
+    --update, -u          Update existing contacts (name, address etc.)
+    --dryrun, -d          Indicate what would happen but don't send to EveryAction
+    --log LOGFILENAME, -l LOGFILENAME
+                            Defaults to name of input file with .log extension. Use '-' for console.
+    --resume              Resume importing imports (as per existing file)
+    --overwrite           Overwrite existing log file

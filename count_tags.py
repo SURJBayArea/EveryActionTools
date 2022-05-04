@@ -12,10 +12,6 @@ Assume tags separated by ", " which misses some tags with embedded "," like
 """
 import csv
 import sys
-import re
-
-# Special case with embedded comma:
-#MATCHTAGS=r'[^,\s].[^,]*[(][^,]*,[^,]*[)][^,]*|[^,\s].[^,]+'
 
 tag_count = {}
 total = 0
@@ -34,6 +30,8 @@ for filename in sys.argv[1:]:
                     tag_count[tag] = tag_count.get(tag, 0) + 1
 
 tags_sorted = sorted(tag_count.items(),key=lambda x: x[1],reverse=True)
+
+print("count,old,new")
 for (tag, count) in tags_sorted:
     print(f"{count},{tag}")
 
