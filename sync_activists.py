@@ -163,7 +163,7 @@ class SyncActvists:
 
                     try:
                         person = self.client.people.lookup(
-                            email=user['email'], expand="Addresses,ExternalIds,Emails")
+                            email=user['email'], expand="Addresses,ExternalIds,Emails,Phones")
                     except AttributeError as ex:
                         person = None
                         self.log_actions(rowid, "ERROR", user['email'],
@@ -192,6 +192,9 @@ class SyncActvists:
     def sync_phones(self, person: Person, user: dict, user_actions: list):
         """Sync phones for existing user
         """
+        if person.phones and len(person.phones) > 0:
+            return
+
         phones = self.get_user_phones(user, user_actions)
         if len(phones) > 0:
             if not self.args.dryrun:
@@ -214,15 +217,16 @@ class SyncActvists:
                 person_subscription_status = contact_email.subscriptionStatus or "None"
                 break
         if user['can2_subscription_status'] == 'unsubscribed':
-            if person_subscription_status == 'None':
+            if person_subscription_status in ('None', 'S'):
                 user_actions.append(
-                    f"Unsubscribed(was {person_subscription_status}]")
-                preferred_contact_email.isSubscribed = False
+                    f"Unsubscribed(from '{person_subscription_status}')")
+                preferred_contact_email.isSubscribed = None
+                preferred_contact_email.subscriptionStatus = "U"
                 if not self.args.dryrun:
                     self.client.people.update(
                         person.van_id,
                         emails=[preferred_contact_email])
-        else:
+        else:  # Subscribed
             if person_subscription_status == 'None':
                 user_actions.append(
                     f"Subscribed[was {person_subscription_status}]")
@@ -231,6 +235,8 @@ class SyncActvists:
                     self.client.people.update(
                         person.van_id,
                         emails=[preferred_contact_email])
+            elif person_subscription_status == 'U':
+                user_actions.append("Can't subscribe (is 'U')")
 
     def update_or_create(self, user: dict, user_actions: list) -> Person | None:
         """Create or update Every Action person based on ActionNetwork columns
