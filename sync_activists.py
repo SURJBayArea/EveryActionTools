@@ -245,7 +245,7 @@ class SyncActvists:
                 "email": user['email'],
                 "type": "P",
                 "isPreferred": True,
-                "isSubscribed": user.get('can2_subscription_status', '') == 'unsubscribed',
+                "isSubscribed": user.get('can2_subscription_status', 'None') != 'unsubscribed',
             }],
             "firstName": user['first_name'],
             "lastName": user['last_name']
