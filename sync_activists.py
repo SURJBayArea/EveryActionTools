@@ -29,8 +29,8 @@ import sys
 from datetime import datetime
 
 from dotenv import load_dotenv
-from everyaction import EAClient
-from everyaction.objects import Person, ActivistCodeData, Code
+from everyaction import EAClient, EAHTTPException
+from everyaction.objects import Person, ActivistCodeData, Code, ActivistCode
 
 
 class SyncActvists:
@@ -138,7 +138,9 @@ class SyncActvists:
                     sys.exit(
                         f"Error: '{self.filename}': Expected column 'email'")
                 #check_uuid = 'uuid' in reader.fieldnames
-                #check_subscription_status = 'can2_subscription_status' in reader.fieldnames
+                check_email_subscription_status = 'can2_subscription_status' in reader.fieldnames
+                check_phones = any((col in reader.fieldnames) for col in [
+                                   'Phone', 'Phone Number', 'can2_phone'])
                 check_tags = 'can2_user_tags' in reader.fieldnames
 
                 # Remove fields not present
@@ -160,7 +162,8 @@ class SyncActvists:
                         continue
 
                     try:
-                        person = self.client.people.lookup(email=user['email'])
+                        person = self.client.people.lookup(
+                            email=user['email'], expand="Addresses,ExternalIds,Emails")
                     except AttributeError as ex:
                         person = None
                         self.log_actions(rowid, "ERROR", user['email'],
@@ -171,11 +174,63 @@ class SyncActvists:
                     elif self.args.update:
                         user_actions.append("update")
                         person = self.update_or_create(user, user_actions)
+                    else:
+                        # Person record exists but may not have correect email subscription
+                        if person and check_email_subscription_status:
+                            self.sync_email_subscription(
+                                person, user, user_actions)
+
+                        # Person record exists but may not have email
+                        if person and check_phones:
+                            self.sync_phones(person, user, user_actions)
 
                     if person and check_tags:
                         self.sync_tags(person, user, user_actions)
 
                     self.log_actions(rowid, "OK", user['email'], user_actions)
+
+    def sync_phones(self, person: Person, user: dict, user_actions: list):
+        """Sync phones for existing user
+        """
+        phones = self.get_user_phones(user, user_actions)
+        if len(phones) > 0:
+            if not self.args.dryrun:
+                try:
+                    self.client.people.update(person.van_id,
+                                              phones=phones)
+                except EAHTTPException as ex:
+                    user_actions.append(str(ex))
+                    print(
+                        f"error: {user['email']}: {phones} {ex}", file=sys.stderr)
+
+    def sync_email_subscription(self, person: Person, user: dict, user_actions: list):
+        """Check email subscription status - update if needed
+        """
+        preferred_contact_email = None
+        for contact_email in person.emails:
+            if contact_email.isPreferred:
+                preferred_contact_email = contact_email
+                # If subscriptionStatus is "S", "U" or "" for not subscribed
+                person_subscription_status = contact_email.subscriptionStatus or "None"
+                break
+        if user['can2_subscription_status'] == 'unsubscribed':
+            if person_subscription_status == 'None':
+                user_actions.append(
+                    f"Unsubscribed(was {person_subscription_status}]")
+                preferred_contact_email.isSubscribed = False
+                if not self.args.dryrun:
+                    self.client.people.update(
+                        person.van_id,
+                        emails=[preferred_contact_email])
+        else:
+            if person_subscription_status == 'None':
+                user_actions.append(
+                    f"Subscribed[was {person_subscription_status}]")
+                preferred_contact_email.isSubscribed = True
+                if not self.args.dryrun:
+                    self.client.people.update(
+                        person.van_id,
+                        emails=[preferred_contact_email])
 
     def update_or_create(self, user: dict, user_actions: list) -> Person | None:
         """Create or update Every Action person based on ActionNetwork columns
@@ -205,8 +260,26 @@ class SyncActvists:
         if len(address) > 0:
             fields["addresses"] = [address]
 
+        phones = self.get_user_phones(user, user_actions)
+        if len(phones) > 0:
+            fields["phones"] = phones
+
+        if not self.args.dryrun:
+            person = self.client.people.find_or_create(
+                **fields)
+            return person
+
+        return None
+
+    def get_user_phones(self, user: dict, user_actions: list) -> list:
+        """Extract phones from import record
+
+         * `can2_phone` - mobile/cell phone (newer field added by Action Network)
+         * `can2_sms_status` - SMS subscription status
+         * `Phone` - contact phone (custom field)
+         * `Phone Number` - contact phone (custom field)
+        """
         #######################################
-        # 'can2_phone' - mobile/cell phone
         phones = []
         phone_digits = {}
         if user_mobile := user.get('can2_phone', ''):
@@ -215,7 +288,10 @@ class SyncActvists:
                 "phoneType": "C"
             }
             if user.get('can2_sms_status', 'unknown') == 'subscribed':
+                user_actions.append("mobile subscribed")
                 phone["phoneOptInStatus"] = 'I'
+            else:
+                user_actions.append("mobile")
 
             phone_digits[self.digits(user_mobile)] = True
             phones.append(phone)
@@ -227,22 +303,19 @@ class SyncActvists:
                 digits = self.digits(user_phone)
                 if digits not in phone_digits:
                     phone_digits[digits] = True
+                    phone = {
+                        "phoneNumber": user_phone
+                    }
                     phones.append(phone)
+                    user_actions.append(field)
 
-        if len(phones) > 0:
-            fields["phones"] = phones
-
-        if not self.args.dryrun:
-            person = self.client.people.find_or_create(**fields)
-            return person
-
-        return None
+        return phones
 
     def digits(self, phone):
         """Returns digits only - used to check for duplicates"""
         return re.sub(r'\D', '', phone.lstrip('+1'))
 
-    def sync_tags(self, contact: Person, user: dict, user_actions: list):
+    def sync_tags(self, person: Person, user: dict, user_actions: list):
         """Create Activist Codes based on ActionNetwork tags
 
          * `user['can2_user_tags']` - e.g. "SURJ_Action_Hour, SURU2021, ShowUpRiseUp 2020"
@@ -255,32 +328,43 @@ class SyncActvists:
         """
         code_by_name = {}
         for user_tag in user['can2_user_tags'].split(", "):
-            if user_tag in self.tag_mapping:
-                code_by_name[self.tag_mapping[user_tag]
-                             .activistCodeId] = self.tag_mapping[user_tag]
+            if user_tag:
+                if user_code_data := self.tag_mapping.get(user_tag):
+                    if isinstance(user_code_data,  ActivistCode):
+                        user_code_id = user_code_data.activistCodeId
+                    elif isinstance(user_code_data,  Code):
+                        user_code_id = user_code_data.codeId
+                    else:
+                        user_code_id = None
+                        print("Internal Mapping Error:" + str(user_code_data))
+
+                    code_by_name[user_code_id] = user_code_data
+                    if self.args.verbose:
+                        print(
+                            f"Mapped tag {user_tag} to {user_code_id} ({user_code_data.name})")
 
         if len(code_by_name) > 0:
             # existing Activist Codes
-            for code in self.client.people.activist_codes(contact.van_id):
+            for code in self.client.people.activist_codes(person.van_id):
                 try:
                     code_by_name.pop(code.activistCodeId)
                 except KeyError:
                     pass
-            # existing Source Codes and Tags
-            for code in self.client.people.activist_codes(contact.van_id):
-                try:
-                    code_by_name.pop(code.activistCodeId)
-                except KeyError:
-                    pass
+            # existing Tags - don't know what function to call
+            # for code in self.client.people.codes(person.van_id):
+            #    try:
+            #        code_by_name.pop(code.activistCodeId)
+            #    except KeyError:
+            #        pass
             for new_code_id, new_code_data in code_by_name.items():
-                user_actions.append(new_code_data.name)
-                if not self.args.dryrun:
-                    if isinstance(new_code_data,  ActivistCodeData):
+                if isinstance(new_code_data,  ActivistCode):
+                    user_actions.append(new_code_data.name)
+                    if not self.args.dryrun:
                         self.client.people.apply_activist_code(
-                            new_code_id, vanId=contact.van_id)
-                    elif isinstance(new_code_data,  Code):
-                        self.client.people.codes(
-                            new_code_id, vanId=contact.van_id)
+                            new_code_id, vanId=person.van_id)
+                # Error in client lib
+                # elif isinstance(new_code_data,  Code):
+                #    self.client.people.add_code(van_id=person.van_id, codeId=new_code_id)
 
     def load_tag_mapping(self):
         """Look up actvist codes
@@ -289,14 +373,19 @@ class SyncActvists:
         code_by_name = {}
 
         for code in self.client.activist_codes.list():
+            if self.args.verbose:
+                print(f"load activist code: {code.name} {code}")
             code_by_name[code.name] = code
 
         for code in self.client.codes.list():
-            if code.name in code_by_name:
-                print(
-                    f"Warning: Ignoring duplicate {code.codeType} '{code.name}'", file=sys.stderr)
-            else:
-                code_by_name[code.name] = code
+            if code.codeType == 'Tag':
+                if self.args.verbose:
+                    print(f"load tag: {code.codeType} {code}'")
+                if code.name in code_by_name:
+                    print(
+                        f"Warning: Ignoring duplicate {code.codeType} '{code.name}'", file=sys.stderr)
+                else:
+                    code_by_name[code.name] = code
 
         with open(self.tags_mapping_filename, newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -360,7 +449,7 @@ class SyncActvists:
                     log_line = existing_logfile.readline()
                     if log_line != header_row + "\n":
                         raise Warning(f"Logfile {self.args.logfilename} "
-                                      "for '{self.filename}' found '{log_line}")
+                                      f"for '{self.filename}' found '{log_line}")
                     # [999] VERB ABC DEF -> ('[999]', 'VERB', 'ABC DEF")
                     while True:
                         log_line = existing_logfile.readline()

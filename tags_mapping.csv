@@ -1,28 +1,28 @@
 count,old,new
 4231,SURJ_Action_Hour,Action Hour
-4189,2020Campaigns.Contacted
-3863,2020Campaigns.NoAnswer
-3250,Intro_to_SURJ
-2599,2020Campaigns.ColdList
-2249,LegislativeActionList
-2241,2020Campaigns.Texted
-1681,Police
-1670,Interest_Basebuilding
+4189,2020Campaigns.Contacted,2020 Campaigns Contacted
+3863,2020Campaigns.NoAnswer,2020 Campaigns NoAnswer
+3250,Intro_to_SURJ,Intro to SURJ
+2599,2020Campaigns.ColdList,2020 Campaigns ColdList
+2249,LegislativeActionList,Legislative Action
+2241,2020Campaigns.Texted,2020 Campaigns Texted
+1681,Police,Police
+1670,Interest_Basebuilding,BaseBuilding
 1549,2020Campaigns.HotList
 1446,2020Campaigns.Prop15.Yes
-1211,#Trump
+1211,#Trump,Trump
 1179,Interest_Action
-1129,Study_and_Action
+1129,Study_and_Action,Study and Action
 1089,ShowUpRiseUp 2020
-986,#White Supremacy
-857,#Calling In
-832,#Militarization
+986,#White Supremacy,White Supremacy
+857,#Calling In,Calling In
+832,#Militarization,Militarization
 812,2020Campaigns.FullScript
 790,SURU2021
 768,?Direct Action
 717,Phone_Bank
 611,Workshops
-570,2020Campaigns.Phonebank
+570,2020Campaigns.Phonebank,2020 Campaigns Phonebank
 526,Donor - 12 days
 521,Intro Mtg Confirm 6.18
 500,$Donor - 12 days
@@ -30,11 +30,11 @@ count,old,new
 450,2020Campaigns.Phonebank.SURJ
 448,#Faith
 445,Request Contact
-401,Human_Billboard
+401,Human_Billboard,Human Billboard
 380,2020Election.ElectionPledge
-378,?Social Media
+378,?Social Media,Social Media
 377,#Families
-331,ActiveMember_2020
+331,ActiveMember_2020,Active Member 2020
 309,SURU2021_Phonebank_Called
 300,CommitteePage
 292,#Displacement
@@ -42,25 +42,25 @@ count,old,new
 282,DoNotCall
 272,2020Election.Streets
 246,2020Election.CarCaravans
-240,Public_Policy
+240,Public_Policy,Public Policy
 240,2020Campaigns.NoPhonebank
-240,#Urban Shield
+240,#Urban Shield,Urban Shield
 235,2020Election.Phonebanking
 231,ChapterPage
-230,Youth_and_Families
+230,Youth_and_Families,Youth & Families
 212,2020Election.DigitalAction
 192,Govt_Meetings
-190,Fundraising
+190,Fundraising,Fundraising
 188,2020Election.Fundraising
 180,#DAPL
-180,Mobilization
+180,Mobilization,Mobilization
 178,2020Campaigns.Phonebank.SFR
 177,Benevity
-176,Communications
+176,Communications,Communications
 161,?Comms
 150,#Internal Work
-145,Queer_and_Trans
-144,?Blog
+145,Queer_and_Trans,Queer & Trans
+144,?Blog,Blog
 129,#White Fragility
 121,Volunteer_Canvass
 118,2020Campaigns.BadNumber
@@ -73,7 +73,7 @@ count,old,new
 73,?Web Design
 72,2020Campaigns.NotInterested
 69,2020Campaigns.Prop15.Undecided
-59,?Graphic Design
+59,?Graphic Design,Graphic Design
 56,Volunteer_Car
 55,#Queer Trans
 53,Bystander Intervention
@@ -85,7 +85,7 @@ count,old,new
 45,2019 1:09 AM)
 32,intro_commit_2020-11
 32,intro_commit_2021-04
-30,Accessibility_Working_Group
+30,Accessibility_Working_Group,Accessibility
 30,?Facilitation
 29,intro_commit_2020-09
 26,intro_commit_2020-10
