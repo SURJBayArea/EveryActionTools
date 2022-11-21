@@ -1,2 +1,2 @@
-everyaction-client==0.2.10
-python-dotenv>=0.20.0
+everyaction-client
+python-dotenv
